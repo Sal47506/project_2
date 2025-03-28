@@ -1,4 +1,4 @@
-# Large Scale Data Processing: Project 2 Name: Salamun Nuhin Date: 2/28/25
+# Large Scale Data Processing (CSCI3390): Project 2 Name: Salamun Nuhin Date: 2/28/25
 
 ### 📊 Algorithm Results Table
 
