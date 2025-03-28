@@ -1,19 +1,19 @@
 # Large Scale Data Processing: Project 2 Name: Salamun Nuhin Date: 2/28/25
 
-### 📊 Project 2 Results Summary
+### 📊 Algorithm Results Table
 
 | Algorithm                      | Parameters              | Time (Local) | Estimate (Local) | Time (GCP) | Estimate (GCP) |
 |-------------------------------|--------------------------|--------------|------------------|------------|----------------|
 | **Exact F2**                  | –                        | 17s          | 8,567,966,130     | 124s       | 8,567,966,130   |
 | **Tug-of-War (ToW)**          | width=1, depth=1         | 4s           | 13,366,336        | 53s        | 338,265,664     |
 | **Tug-of-War (ToW)**          | width=10, depth=3        | 117s         | 6,512,755,576     | 941s       | 8,529,640,781   |
-| **BJKST**                     | bucket=5000, trials=5    | 5s           | 7,864,320         | 83s        | 7,278,592       |
+| **BJKST**                     | bucket=300, trials=5    | 4s           |  8,388,608         | 83s        | 8,454,144       |
 | **Exact F0**                  | –                        | 17s          | 7,406,649         | 108s       | 7,406,649       |
 
-### 📈 BJKST and ToW Comparison
+### BJKST and ToW Comparisons with F0 and F2 Norms Respectively
 
 **BJKST vs Exact F0**  
-The BJKST algorithm provides a fast and memory-efficient approximation of the F0 norm quite accurately. On both local and GCP runs, BJKST produced estimates very close to the exact value (7,864,320 vs 7,406,649 locally; 7,278,592 vs 7,406,649 on GCP). This shows BJKST performs well with appropriate bucket size and number of trials, achieving less than 10% error. But on GCP the runtime was significantly longer than local runs because of the cluster overhead.
+The BJKST algorithm offers a lightweight and efficient way to approximate the F0 norm. With a bucket size of 300 and 5 trials, it gave estimates of 8,388,608 (local) and 8,454,144 (GCP), compared to the true value of 7,406,649. That’s a 13.2% error locally and ~14.1% on GCP and both are well within the desired ±20% accuracy range. The results show that BJKST, with proper tuning, can closely match the exact F0 while running significantly faster than the exact computation, especially on local. However on GCP, added cluster overhead contributes to slower runtimes despite the solid accuracy.
 
 **Tug-of-War vs Exact F2**  
 The ToW algorithm approximates the second frequency moment differs a lot depending on the width you set it at (there is a high variance between a depth of 1 vs depth of 10 but depth of 1 runs faster). At low width/depth (width=1, depth=1), the approximation was extremely poor and unstable (e.g., 13M locally vs 8.5B exact), highlighting sensitivity to parameter tuning. Increasing width and depth (e.g., width=10, depth=3) significantly improved the estimate (6.5B locally, 8.5B on GCP), demonstrating that higher parameter values improve accuracy at the cost of runtime. Basically, ToW can approximate F2 well, but requires careful tuning to reduce variance.
