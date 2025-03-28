@@ -43,7 +43,7 @@ object main{
     }
   }
 
-  class four_universal_Radamacher_hash_function extends hash_function(2) {  // a 4-universal hash family, numBuckets_in is the numer of buckets
+  class four_universal_Rademacher_hash_function extends hash_function(2) {  // a 4-universal hash family, numBuckets_in is the numer of buckets
     override val a: Long = (rand.nextLong % p)   // a is a random number is [0,p]
     override val b: Long = (rand.nextLong % p) // b is a random number in [0,p]
     val c: Long = (rand.nextLong % p)   // c is a random number is [0,p]
@@ -63,28 +63,69 @@ object main{
     }
   }
 
-  class BJKSTSketch(bucket_in: Set[(String, Int)] ,  z_in: Int, bucket_size_in: Int) extends Serializable {
-/* A constructor that requies intialize the bucket and the z value. The bucket size is the bucket size of the sketch. */
-
-    var bucket: Set[(String, Int)] = bucket_in
-    var z: Int =
-
-    val BJKST_bucket_size = bucket_size_in;z_in
-
-    def this(s: String, z_of_s: Int, bucket_size_in: Int){
-      /* A constructor that allows you pass in a single string, zeroes of the string, and the bucket size to initialize the sketch */
-      this(Set((s, z_of_s )) , z_of_s, bucket_size_in)
+  class BJKSTSketch(bucket_in: Set[(String, Int)], z_in: Int, bucket_size_in: Int) extends Serializable {
+    private var currentBucket: Set[(String, Int)] = bucket_in
+    private var currentZ: Int = z_in
+    private val maxBucketSize: Int = bucket_size_in
+  
+    def this(initialString: String, initialZ: Int, maxSize: Int) = {
+      this(Set((initialString, initialZ)), initialZ, maxSize)
     }
-
-    def +(that: BJKSTSketch): BJKSTSketch = {    /* Merging two sketches */
-
+  
+    def merge(other: BJKSTSketch): BJKSTSketch = {
+      currentZ = math.max(currentZ, other.currentZ)
+      currentBucket = currentBucket union other.currentBucket
+      
+      // Maintain bucket size invariant
+      shrinkBucketIfNeeded()
+      this
     }
-
-    def add_string(s: String, z_of_s: Int): BJKSTSketch = {   /* add a string to the sketch */
-
+  
+    def addElement(str: String, strZ: Int): BJKSTSketch = {
+      if (strZ >= currentZ) {
+        currentBucket = currentBucket + ((str, strZ))
+        shrinkBucketIfNeeded()
+      }
+      this
     }
+  
+    private def shrinkBucketIfNeeded(): Unit = {
+      while (currentBucket.size >= maxBucketSize) {
+        currentZ += 1
+        currentBucket = currentBucket.filter(_._2 >= currentZ)
+      }
+    }
+  
+    def getBucketSize: Int = currentBucket.size
+    def getZ: Int = currentZ
   }
+  
+  def BJKST(data: RDD[String], bucketWidth: Int, numTrials: Int): Double = {
+    val hashFunctions = Seq.fill(numTrials)(new hash_function(2000000000))
 
+    def mergeValue(sketches: Seq[BJKSTSketch], str: String): Seq[BJKSTSketch] = {
+      sketches.zipWithIndex.map { case (sketch, i) => 
+        val zeros = hashFunctions(i).zeroes(hashFunctions(i).hash(str))
+        sketch.addElement(str, zeros)
+      }
+  }
+  
+    def mergeCombiners(s1: Seq[BJKSTSketch], s2: Seq[BJKSTSketch]): Seq[BJKSTSketch] = {
+      s1.zip(s2).map { case (sketch1, sketch2) => sketch1.merge(sketch2) }
+    }
+  
+    // Create and aggregate sketches
+    val sketches = data.aggregate(
+      Seq.fill(numTrials)(new BJKSTSketch("", 0, bucketWidth))
+    )(mergeValue, mergeCombiners)
+  
+    val estimates = sketches.map(sketch => 
+      math.pow(2, sketch.getZ.toDouble) * sketch.getBucketSize
+    ).sorted
+  
+    if (numTrials % 2 == 1) estimates(numTrials / 2)
+    else (estimates(numTrials / 2 - 1) + estimates(numTrials / 2)) / 2.0
+  }
 
   def tidemark(x: RDD[String], trials: Int): Double = {
     val h = Seq.fill(trials)(new hash_function(2000000000))
@@ -98,30 +139,34 @@ object main{
     return ans
   }
 
+  def Tug_of_War(x: RDD[String], width: Int, depth: Int): Long = {
+    val estimates: Array[Double] = (0 until depth).map { _ =>
+      val sums = (0 until width).map { _ =>
+          val h = new four_universal_Rademacher_hash_function
+          x.map(s => h.hash(s).toLong).reduce(_ + _)
+      }
+      val means = sums.map(sum => sum * sum) // X^2 for each sketch
+      means.sum.toDouble / width
+    }.toArray
 
-  def BJKST(x: RDD[String], width: Int, trials: Int) : Double = {
-
+    val sorted = estimates.sorted
+    if (depth % 2 == 1) sorted(depth / 2).toLong
+    else ((sorted(depth / 2 - 1) + sorted(depth / 2)) / 2.0).toLong
   }
-
-
-  def Tug_of_War(x: RDD[String], width: Int, depth:Int) : Long = {
-
-  }
-
 
   def exact_F0(x: RDD[String]) : Long = {
     val ans = x.distinct.count
     return ans
   }
 
-
-  def exact_F2(x: RDD[String]) : Long = {
-
+  def exact_F2(x: RDD[String]): Long = {
+    x.map(x => (x, 1L))  // Use Long instead of Int
+     .reduceByKey(_ + _)
+     .map { case (_, count) => count * count }
+     .reduce(_ + _)
   }
 
-
-
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder().appName("Project_2").getOrCreate()
 
     if(args.length < 2) {
